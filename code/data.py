@@ -1,9 +1,7 @@
 import torch
 from torch.utils.data import Dataset
-import numpy as np
 from PIL import Image
 import torchvision.transforms as tf
-import os
 
 
 class SmokeDataset(Dataset):
@@ -32,3 +30,15 @@ class SmokeDataset(Dataset):
             image = self.valid_transform(image)
         return image, torch.tensor(self.label[index], dtype=torch.long)
 
+class SmokeDataset_test(Dataset):
+    def __init__(self, img_list):
+        self.transform = tf.Compose([tf.Resize((224,224)),
+                                    tf.ToTensor(), 
+                                    tf.Normalize((0.4810, 0.4591, 0.4134),(0.2522, 0.2258, 0.2291))])
+        self.img = img_list
+    def __len__(self):
+        return len(self.img)
+    def __getitem__(self, index):
+        image = Image.open(self.img[index]).convert('RGB')
+        image = self.transform(image)
+        return image

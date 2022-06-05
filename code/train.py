@@ -8,23 +8,16 @@ from torch.utils.data import DataLoader
 import torchvision.models as models
 import torch.nn as nn
 from sklearn.metrics import f1_score
+from utils import seed_everything
 
-def seed_everything(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)  # if use multi-GPU
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    np.random.seed(seed)
-    random.seed(seed)
-
+seed_everything(42)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 BATCH_SIZE = 32
-LR = 1e-3
+LR = 1e-4
 EPOCHS = 100
 early_stop = 8
-nonsmoking_dir = '../SmokeImage/nonsmoking'
-smoking_dir = '../SmokeImage/smoking'
+nonsmoking_dir = '../data/Train_image_cropped/nonsmoking'
+smoking_dir = '../data/Train_image_cropped/smoking'
 nonsmoking_image_list = os.listdir(nonsmoking_dir)
 smoking_image_list = os.listdir(smoking_dir)
 smoking_image_list = [os.path.join(smoking_dir, x) for x in smoking_image_list]
@@ -40,11 +33,11 @@ valid_dataset = SmokeDataset(x_valid, y_valid, False)
 train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
 valid_dataloader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
-model = models.resnet50(pretrained=False).to(device)
+model = models.resnet50(pretrained=True).to(device)
 model.fc = nn.Linear(in_features=2048, out_features=2, bias=True)
 criterion = nn.CrossEntropyLoss().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr = LR)
-# lr_scheduler = torch.optim.
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=5, eta_min=0)
 
 best_f1 = 0
 early_stop_count = 0
@@ -64,6 +57,7 @@ for epoch in range(EPOCHS):
         loss = criterion(output, y)
         loss.backward()
         optimizer.step()
+        scheduler.step()
         total_train_loss.append(loss.cpu().item())
         _, pred = torch.max(output,1)
         total_train_acc.extend((pred==y).cpu().tolist())
@@ -76,7 +70,7 @@ for epoch in range(EPOCHS):
         loss = criterion(output, y)
         _, pred = torch.max(output,1)
         total_valid_loss.append(loss.cpu().item())
-        total_train_acc.extend((pred==y).cpu().tolist())
+        total_valid_acc.extend((pred==y).cpu().tolist())
         total_valid_f1.append(f1_score(y_true = y.cpu().numpy(), y_pred = pred.cpu().numpy(), average='macro'))
     
     epoch_train_loss = np.mean(total_train_loss)
@@ -93,7 +87,7 @@ for epoch in range(EPOCHS):
         best_f1 = epoch_f1
         early_stop_count = 0
         print('update best model')
-        torch.save(model.state_dict(), './pytorch.bin')
+        torch.save(model.state_dict(), '../pt/pytorch.bin')
     else:
         early_stop_count+=1
     if early_stop_count == early_stop:
